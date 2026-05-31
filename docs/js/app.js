@@ -418,11 +418,17 @@ async function loadWorkspaceConfig() {
     if (savedConfig) {
         try {
             const config = JSON.parse(savedConfig);
-            if (config.useFileSystemAPI && config.folderHandle) {
-                // Verify we have permission to the folder
-                // Note: The actual handle can't be stored in localStorage, so we'll need to re-request
-                workspaceConfig.useFileSystemAPI = config.useFileSystemAPI;
+            if (config.useFileSystemAPI) {
+                // FileSystem API was previously used, but the handle is lost on refresh
+                // Prompt user to re-select the folder
+                workspaceConfig.useFileSystemAPI = true;
                 workspaceConfig.mode = "local";
+                workspaceConfig.folderHandle = null; // Handle is lost, needs re-selection
+
+                // Show a toast to let user know they need to re-select folder
+                setTimeout(() => {
+                    showToast("📁 Please select your workspace folder again (browser security)", 5000);
+                }, 1000);
             }
         } catch (error) {
             console.warn("Failed to load saved workspace config:", error);
@@ -823,7 +829,20 @@ async function loadFileList() {
     try {
         let data;
 
-        if (workspaceConfig.useFileSystemAPI && workspaceConfig.folderHandle) {
+        if (workspaceConfig.useFileSystemAPI && !workspaceConfig.folderHandle) {
+            // FileSystem API was used before, but folder handle is lost (browser security)
+            // Show a message and empty file list
+            const fileList = document.getElementById("fileList");
+            fileList.innerHTML = `
+                <div style="padding: 20px; text-align: center; color: #666;">
+                    <p>📁 Folder not selected</p>
+                    <p style="font-size: 12px; margin-top: 10px;">
+                        Click <strong>Workspace</strong> button and select your folder again
+                    </p>
+                </div>
+            `;
+            return;
+        } else if (workspaceConfig.useFileSystemAPI && workspaceConfig.folderHandle) {
             // Load files from FileSystem API
             data = await getFilesFromHandle(workspaceConfig.folderHandle);
         } else if (backendAvailable) {
@@ -1060,6 +1079,12 @@ async function openFile(filename) {
             return;
         }
 
+        // Check if in FileSystem API mode but folder handle is missing
+        if (workspaceConfig.useFileSystemAPI && !workspaceConfig.folderHandle) {
+            showToast("📁 Please select your workspace folder first", 3000);
+            return;
+        }
+
         // Check for unsaved changes before switching files
         if (currentFile && currentFile !== filename) {
             const canSwitch = await checkUnsavedChanges();
@@ -1131,6 +1156,11 @@ async function saveFile() {
     try {
         const editorContent = editor.getValue();
 
+        if (workspaceConfig.useFileSystemAPI && !workspaceConfig.folderHandle) {
+            showToast("📁 Please select your workspace folder first", 3000);
+            return;
+        }
+
         if (workspaceConfig.useFileSystemAPI && workspaceConfig.folderHandle) {
             // Save file using FileSystem API
             await writeFileFromHandle(workspaceConfig.folderHandle, filename, editorContent);
@@ -1186,6 +1216,11 @@ async function deleteItem() {
 async function deleteFile() {
     if (!currentFile) {
         showToast("⚠️ No file selected", 3000);
+        return;
+    }
+
+    if (workspaceConfig.useFileSystemAPI && !workspaceConfig.folderHandle) {
+        showToast("📁 Please select your workspace folder first", 3000);
         return;
     }
 
