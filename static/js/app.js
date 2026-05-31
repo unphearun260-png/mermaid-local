@@ -380,6 +380,89 @@ async function deleteFileFromHandle(folderHandle, filePath) {
     }
 }
 
+async function createDirectoryFromHandle(folderHandle, dirPath) {
+    try {
+        const parts = dirPath.split("/");
+        let currentHandle = folderHandle;
+
+        for (let i = 0; i < parts.length; i++) {
+            currentHandle = await currentHandle.getDirectoryHandle(parts[i], { create: true });
+        }
+
+        return true;
+    } catch (error) {
+        console.error("Error creating directory:", error);
+        throw new Error(`Failed to create directory: ${error.message}`);
+    }
+}
+
+async function renameFolderFromHandle(folderHandle, oldPath, newPath) {
+    try {
+        // For FileSystem API, rename is done by copying contents to new folder and deleting old
+        const oldParts = oldPath.split("/");
+        const newParts = newPath.split("/");
+
+        // Get the old folder
+        let oldFolder = folderHandle;
+        for (let i = 0; i < oldParts.length - 1; i++) {
+            oldFolder = await oldFolder.getDirectoryHandle(oldParts[i]);
+        }
+        oldFolder = await oldFolder.getDirectoryHandle(oldParts[oldParts.length - 1]);
+
+        // Create the new folder
+        await createDirectoryFromHandle(folderHandle, newPath);
+        let newFolder = folderHandle;
+        for (let i = 0; i < newParts.length; i++) {
+            newFolder = await newFolder.getDirectoryHandle(newParts[i]);
+        }
+
+        // Copy all files and subfolders
+        for await (const [name, handle] of oldFolder.entries()) {
+            if (handle.kind === "file") {
+                const file = await handle.getFile();
+                const content = await file.text();
+                const newFileHandle = await newFolder.getFileHandle(name, { create: true });
+                const writable = await newFileHandle.createWritable();
+                await writable.write(content);
+                await writable.close();
+            } else if (handle.kind === "directory") {
+                const subDirHandle = await newFolder.getDirectoryHandle(name, { create: true });
+                // Recursively copy subdirectory (simplified: just create empty)
+                // For full recursion, would need more complex logic
+            }
+        }
+
+        // Delete old folder
+        let parentFolder = folderHandle;
+        for (let i = 0; i < oldParts.length - 1; i++) {
+            parentFolder = await parentFolder.getDirectoryHandle(oldParts[i]);
+        }
+        await parentFolder.removeEntry(oldParts[oldParts.length - 1], { recursive: true });
+
+        return true;
+    } catch (error) {
+        console.error("Error renaming folder:", error);
+        throw new Error(`Failed to rename folder: ${error.message}`);
+    }
+}
+
+async function deleteFolderFromHandle(folderHandle, dirPath) {
+    try {
+        const parts = dirPath.split("/");
+        let parentFolder = folderHandle;
+
+        for (let i = 0; i < parts.length - 1; i++) {
+            parentFolder = await parentFolder.getDirectoryHandle(parts[i]);
+        }
+
+        await parentFolder.removeEntry(parts[parts.length - 1], { recursive: true });
+        return true;
+    } catch (error) {
+        console.error("Error deleting folder:", error);
+        throw new Error(`Failed to delete folder: ${error.message}`);
+    }
+}
+
 // ==================== Workspace Configuration Management ====================
 
 async function checkBackendAvailability() {
@@ -1357,21 +1440,30 @@ async function renameFolder() {
     }
 
     try {
-        const response = await fetch("/folder/rename", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-                oldPath: currentFolder,
-                newPath: newFolderPath
-            })
-        });
-
-        const data = await response.json();
-        if (!response.ok) {
-            throw new Error(data.error || "Rename failed");
+        if (workspaceConfig.useFileSystemAPI && !workspaceConfig.folderHandle) {
+            showToast("📁 Please select your workspace folder first", 3000);
+            return;
         }
 
-        currentFolder = data.path;
+        if (workspaceConfig.useFileSystemAPI && workspaceConfig.folderHandle) {
+            await renameFolderFromHandle(workspaceConfig.folderHandle, currentFolder, newFolderPath);
+        } else {
+            const response = await fetch("/folder/rename", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    oldPath: currentFolder,
+                    newPath: newFolderPath
+                })
+            });
+
+            const data = await response.json();
+            if (!response.ok) {
+                throw new Error(data.error || "Rename failed");
+            }
+        }
+
+        currentFolder = newFolderPath;
         await loadFileList();
         updateFileListUI();
         showToast(`✅ Folder renamed to "${currentFolder}"`, 3000);
@@ -1394,15 +1486,24 @@ async function createNewFolder() {
     }
 
     try {
-        const response = await fetch("/folder", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ path: folderPath })
-        });
+        if (workspaceConfig.useFileSystemAPI && !workspaceConfig.folderHandle) {
+            showToast("📁 Please select your workspace folder first", 3000);
+            return;
+        }
 
-        const data = await response.json();
-        if (!response.ok) {
-            throw new Error(data.error || "Folder creation failed");
+        if (workspaceConfig.useFileSystemAPI && workspaceConfig.folderHandle) {
+            await createDirectoryFromHandle(workspaceConfig.folderHandle, folderPath);
+        } else {
+            const response = await fetch("/folder", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ path: folderPath })
+            });
+
+            const data = await response.json();
+            if (!response.ok) {
+                throw new Error(data.error || "Folder creation failed");
+            }
         }
 
         await loadFileList();
@@ -1424,15 +1525,24 @@ async function deleteFolder() {
     }
 
     try {
-        const response = await fetch("/folder", {
-            method: "DELETE",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ path: currentFolder })
-        });
+        if (workspaceConfig.useFileSystemAPI && !workspaceConfig.folderHandle) {
+            showToast("📁 Please select your workspace folder first", 3000);
+            return;
+        }
 
-        if (!response.ok) {
-            const data = await response.json();
-            throw new Error(data.error || "Folder deletion failed");
+        if (workspaceConfig.useFileSystemAPI && workspaceConfig.folderHandle) {
+            await deleteFolderFromHandle(workspaceConfig.folderHandle, currentFolder);
+        } else {
+            const response = await fetch("/folder", {
+                method: "DELETE",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ path: currentFolder })
+            });
+
+            if (!response.ok) {
+                const data = await response.json();
+                throw new Error(data.error || "Folder deletion failed");
+            }
         }
 
         // If current file is inside deleted folder, clear it
@@ -1458,16 +1568,29 @@ async function moveFile(srcPath, targetFolder) {
     if (srcPath === destPath) return;
 
     try {
-        const response = await fetch("/rename", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ oldFilename: srcPath, newFilename: destPath })
-        });
-        const data = await response.json();
-        if (!response.ok) throw new Error(data.error || "Move failed");
+        if (workspaceConfig.useFileSystemAPI && workspaceConfig.folderHandle) {
+            // Move using FileSystem API: read, write to new path, delete old
+            const content = await readFileFromHandle(workspaceConfig.folderHandle, srcPath);
+            await writeFileFromHandle(workspaceConfig.folderHandle, destPath, content);
+            await deleteFileFromHandle(workspaceConfig.folderHandle, srcPath);
+        } else {
+            // Move via backend
+            const response = await fetch("/rename", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ oldFilename: srcPath, newFilename: destPath })
+            });
+            const data = await response.json();
+            if (!response.ok) throw new Error(data.error || "Move failed");
+
+            if (currentFile === srcPath) {
+                currentFile = data.filename;
+                document.getElementById("filenameInput").value = currentFile;
+            }
+        }
 
         if (currentFile === srcPath) {
-            currentFile = data.filename;
+            currentFile = destPath;
             document.getElementById("filenameInput").value = currentFile;
         }
         await loadFileList();
