@@ -1996,16 +1996,26 @@ function exportSelectedSVGs() {
 }
 
 async function exportAsPNG() {
+    // Look for diagrams in diagramPreview (pure mermaid) or markdownPreview (mermaid blocks)
+    let svg = null;
+
+    // First check diagramPreview for pure mermaid diagrams
     const diagramPreview = document.getElementById("diagramPreview");
-    if (!diagramPreview) {
-        showToast("⚠️ No diagram to export", 3000);
-        return;
+    if (diagramPreview) {
+        svg = diagramPreview.querySelector("svg");
     }
 
-    const svg = diagramPreview.querySelector("svg");
+    // If not found, check markdownPreview for mermaid blocks in markdown
+    if (!svg) {
+        const markdownPreview = document.getElementById("markdownPreview");
+        if (markdownPreview) {
+            // Look for the first mermaid diagram
+            svg = markdownPreview.querySelector("svg");
+        }
+    }
 
     if (!svg) {
-        showToast("⚠️ No diagram to export", 3000);
+        showToast("⚠️ No diagram to export. Create a diagram first!", 3000);
         return;
     }
 
