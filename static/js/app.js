@@ -2045,8 +2045,13 @@ async function exportAsPNG() {
             closeExportModal();
         });
     };
+    img.onerror = () => {
+        showToast("❌ Failed to render diagram for PNG export", 3000);
+    };
 
-    img.src = "data:image/svg+xml;base64," + btoa(svgString);
+    // Encode SVG with Unicode support using Blob
+    const blob = new Blob([svgString], { type: "image/svg+xml" });
+    img.src = URL.createObjectURL(blob);
 }
 
 function downloadFile(blob, filename) {
