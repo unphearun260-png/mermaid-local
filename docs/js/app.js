@@ -2053,11 +2053,16 @@ async function exportAsPNG() {
         ctx.fillRect(0, 0, canvas.width, canvas.height);
     }
 
-    const svgString = new XMLSerializer().serializeToString(svg);
+    // Clone SVG and set explicit dimensions to ensure proper rendering
+    const svgClone = svg.cloneNode(true);
+    svgClone.setAttribute("width", width);
+    svgClone.setAttribute("height", height);
+
+    const svgString = new XMLSerializer().serializeToString(svgClone);
     const img = new Image();
     img.onload = () => {
         ctx.scale(scale, scale);
-        ctx.drawImage(img, 0, 0);
+        ctx.drawImage(img, 0, 0, width, height);
 
         canvas.toBlob(blob => {
             downloadFile(blob, `${currentFile || "diagram"}.png`);
