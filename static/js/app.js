@@ -1263,8 +1263,8 @@ async function renameCurrentFile() {
         return;
     }
 
-    if (!currentFile.endsWith(".mmd")) {
-        showToast("⚠️ Only .mmd files can be renamed", 3000);
+    if (!currentFile.endsWith(".mmd") && !currentFile.endsWith(".md")) {
+        showToast("⚠️ Only .mmd and .md files can be renamed", 3000);
         return;
     }
 
@@ -1279,8 +1279,10 @@ async function renameCurrentFile() {
         return;
     }
 
-    if (!newFilename.endsWith(".mmd")) {
-        newFilename += ".mmd";
+    // Preserve original extension if not specified
+    if (!newFilename.endsWith(".mmd") && !newFilename.endsWith(".md")) {
+        const originalExt = currentFile.endsWith(".md") ? ".md" : ".mmd";
+        newFilename += originalExt;
     }
 
     if (newFilename === currentFile) {
