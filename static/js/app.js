@@ -1290,21 +1290,34 @@ async function renameCurrentFile() {
     }
 
     try {
-        const response = await fetch("/rename", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-                oldFilename: currentFile,
-                newFilename
-            })
-        });
-
-        const data = await response.json();
-        if (!response.ok) {
-            throw new Error(data.error || "Rename failed");
+        if (workspaceConfig.useFileSystemAPI && !workspaceConfig.folderHandle) {
+            showToast("📁 Please select your workspace folder first", 3000);
+            return;
         }
 
-        currentFile = data.filename;
+        if (workspaceConfig.useFileSystemAPI && workspaceConfig.folderHandle) {
+            // Rename using FileSystem API: read, write to new name, delete old
+            const content = await readFileFromHandle(workspaceConfig.folderHandle, currentFile);
+            await writeFileFromHandle(workspaceConfig.folderHandle, newFilename, content);
+            await deleteFileFromHandle(workspaceConfig.folderHandle, currentFile);
+        } else {
+            // Rename via backend
+            const response = await fetch("/rename", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    oldFilename: currentFile,
+                    newFilename
+                })
+            });
+
+            const data = await response.json();
+            if (!response.ok) {
+                throw new Error(data.error || "Rename failed");
+            }
+        }
+
+        currentFile = newFilename;
         document.getElementById("filenameInput").value = currentFile;
         await loadFileList();
         updateFileListUI();
