@@ -2022,12 +2022,31 @@ async function exportAsPNG() {
     const scale = parseFloat(document.getElementById("exportScale").value) || 3;
     const transparent = document.getElementById("transparentBg").checked;
 
+    // Get actual SVG dimensions (not rendered size)
+    let width, height;
+    const viewBox = svg.getAttribute("viewBox");
+    if (viewBox) {
+        const [, , vbWidth, vbHeight] = viewBox.split(/[\s,]+/).map(Number);
+        width = vbWidth;
+        height = vbHeight;
+    } else {
+        // Fallback: measure actual content bounds
+        try {
+            const bbox = svg.getBBox();
+            width = bbox.width;
+            height = bbox.height;
+        } catch {
+            // Last resort: use current bounding rect
+            const rect = svg.getBoundingClientRect();
+            width = rect.width;
+            height = rect.height;
+        }
+    }
+
     const canvas = document.createElement("canvas");
     const ctx = canvas.getContext("2d");
-
-    const svgRect = svg.getBoundingClientRect();
-    canvas.width = svgRect.width * scale;
-    canvas.height = svgRect.height * scale;
+    canvas.width = width * scale;
+    canvas.height = height * scale;
 
     if (!transparent) {
         ctx.fillStyle = isDarkMode ? "#1e1e1e" : "#ffffff";
