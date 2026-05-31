@@ -1,0 +1,200 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Mermaid Studio Pro</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/app.css') }}">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/monaco-editor@0.44.0/min/vs/loader.min.js"></script>
+    <script src="{{ url_for('static', filename='lib/marked.min.js') }}"></script>
+</head>
+<body>
+    <div class="container">
+        <!-- Top Bar -->
+        <div class="top-bar">
+            <div class="left-section">
+                <button id="toggleSidebarBtn" class="icon-btn hamburger" title="Toggle sidebar"><i class="fas fa-bars"></i></button>
+                <h1 class="title"><i class="fas fa-book"></i> Mermaid Studio Pro</h1>
+            </div>
+            <div class="center-section">
+                <input type="text" id="filenameInput" class="filename-input" placeholder="New file...">
+            </div>
+            <div class="right-section">
+                <button id="saveBtn" class="btn btn-primary" title="Save (Ctrl+S)"><i class="fas fa-save"></i> Save</button>
+                <button id="exportSvgBtn" class="btn" title="Export as SVG"><i class="fas fa-file"></i> SVG</button>
+                <button id="exportPngBtn" class="btn" title="Export as PNG"><i class="fas fa-image"></i> PNG</button>
+                <button id="historyBtn" class="btn" title="View history"><i class="fas fa-history"></i> History</button>
+                <select id="mermaidThemeSelect" class="theme-select" title="Mermaid diagram theme">
+                    <option value="">Select theme...</option>
+                </select>
+                <button id="workspaceBtn" class="btn" title="Workspace settings"><i class="fas fa-cog"></i> Workspace</button>
+                <button id="themeToggle" class="btn" title="Toggle dark/light mode"><i class="fas fa-moon"></i></button>
+            </div>
+        </div>
+
+        <!-- Main Content -->
+        <div class="main-content">
+            <!-- Left Sidebar - File Explorer -->
+            <div class="sidebar">
+                <div class="sidebar-header">
+                    <h3><i class="fas fa-folder"></i> Files</h3>
+                    <div class="sidebar-actions">
+                        <button id="newFolderBtn" class="icon-btn" title="New folder"><i class="fas fa-folder-plus"></i></button>
+                        <button id="newFileBtn" class="icon-btn" title="New file"><i class="fas fa-plus"></i></button>
+                        <button id="renameFileBtn" class="icon-btn" title="Rename file"><i class="fas fa-pencil"></i></button>
+                        <button id="deleteBtn" class="icon-btn" title="Delete file or folder"><i class="fas fa-trash"></i></button>
+                    </div>
+                </div>
+                <input type="text" id="searchInput" class="search-input" placeholder="Search files...">
+                <div id="fileList" class="file-list"></div>
+            </div>
+
+            <!-- Center - Editor -->
+            <div class="editor-container">
+                <div id="editor" style="width: 100%; height: 100%;"></div>
+            </div>
+
+            <!-- Resizer -->
+            <div id="editorResizer" class="resizer resizer-vertical" title="Drag to resize"></div>
+
+            <!-- Right - Preview -->
+            <div class="preview-container">
+                <div class="preview-controls">
+                    <span class="preview-title">Preview (Click diagram to zoom)</span>
+                    <span id="renderStatus" class="render-status" aria-live="polite">Idle</span>
+                </div>
+                <div id="preview" class="preview">
+                    <div class="preview-content">
+                        <div id="markdownPreview" class="markdown-preview"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- History Modal -->
+    <div id="historyModal" class="modal hidden">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2><i class="fas fa-history"></i> Version History</h2>
+                <button id="closeHistoryBtn" class="close-btn"><i class="fas fa-times"></i></button>
+            </div>
+            <div id="historyList" class="history-list"></div>
+        </div>
+    </div>
+
+    <!-- Export Modal -->
+    <div id="exportModal" class="modal hidden">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2><i class="fas fa-upload"></i> Export Options</h2>
+                <button id="closeExportBtn" class="close-btn"><i class="fas fa-times"></i></button>
+            </div>
+            <div class="export-options">
+                <label>
+                    <input type="checkbox" id="transparentBg" checked>
+                    Transparent background
+                </label>
+                <label>
+                    <span>Scale: </span>
+                    <input type="number" id="exportScale" value="3" min="1" max="5">
+                </label>
+                <button id="confirmExportBtn" class="btn btn-primary">Export</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="exportSvgModal" class="modal hidden">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2><i class="fas fa-cube"></i> Export SVG Diagrams</h2>
+                <button id="closeExportSvgBtn" class="close-btn"><i class="fas fa-times"></i></button>
+            </div>
+            <div class="export-options">
+                <label>
+                    <input type="checkbox" id="selectAllSvgDiagrams" checked>
+                    Select all diagrams
+                </label>
+                <div id="svgExportList" class="svg-export-list"></div>
+                <button id="confirmExportSvgBtn" class="btn btn-primary">Export Selected</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Zoom Modal for Diagrams -->
+    <div id="zoomModal" class="modal hidden">
+        <div class="zoom-modal-content">
+            <div class="zoom-modal-header">
+                <h2><i class="fas fa-magnifying-glass"></i> Diagram Viewer</h2>
+                <div class="zoom-controls">
+                    <button id="zoomInBtn" class="zoom-btn" title="Zoom in"><i class="fas fa-plus"></i></button>
+                    <span id="zoomLevel" class="zoom-level">100%</span>
+                    <button id="zoomOutBtn" class="zoom-btn" title="Zoom out"><i class="fas fa-minus"></i></button>
+                    <button id="zoomResetZoomBtn" class="zoom-btn" title="Reset zoom"><i class="fas fa-redo"></i></button>
+                </div>
+                <button id="closeZoomBtn" class="close-btn"><i class="fas fa-times"></i></button>
+            </div>
+            <div class="zoom-modal-body">
+                <div id="zoomDiagramContainer" class="zoom-diagram-container">
+                    <div id="zoomDiagram" class="zoom-diagram"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Workspace Configuration Modal -->
+    <div id="workspaceModal" class="modal hidden">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2><i class="fas fa-cog"></i> Workspace Settings</h2>
+                <button id="closeWorkspaceBtn" class="close-btn"><i class="fas fa-times"></i></button>
+            </div>
+            <div class="workspace-options">
+                <div class="workspace-mode-section">
+                    <h3>Workspace Mode</h3>
+                    <div class="mode-options">
+                        <label class="radio-label">
+                            <input type="radio" name="workspaceMode" value="server" checked>
+                            <span>Server Mode</span>
+                            <small>Upload files to the server (default)</small>
+                        </label>
+                        <label class="radio-label">
+                            <input type="radio" name="workspaceMode" value="local">
+                            <span>Local Mode</span>
+                            <small>Work with files from a local directory</small>
+                        </label>
+                    </div>
+                </div>
+
+                <div id="localPathSection" class="workspace-path-section hidden">
+                    <h3>Local Workspace Path</h3>
+                    <div class="path-input-group">
+                        <div id="folderPickerGroup" class="folder-picker-group hidden">
+                            <button id="selectFolderBtn" class="btn btn-secondary">
+                                <i class="fas fa-folder-open"></i> Select Folder (Modern)
+                            </button>
+                            <small id="folderNote" class="path-note">Use the browser's native folder picker (recommended for modern browsers)</small>
+                        </div>
+                        <div id="pathInputGroup" class="path-input-group-backend">
+                            <input type="text" id="localPathInput" class="path-input" placeholder="Enter absolute path to your workspace directory" />
+                            <small id="pathNote" class="path-note">Enter an absolute path (requires backend server)</small>
+                        </div>
+                    </div>
+                </div>
+
+                <div id="modeInfo" class="mode-info">
+                    <p id="modeDescription"></p>
+                </div>
+
+                <div class="workspace-actions">
+                    <button id="cancelWorkspaceBtn" class="btn">Cancel</button>
+                    <button id="applyWorkspaceBtn" class="btn btn-primary">Apply</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="{{ url_for('static', filename='js/app.js') }}"></script>
+</body>
+</html>
