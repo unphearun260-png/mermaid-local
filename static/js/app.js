@@ -508,10 +508,29 @@ async function loadWorkspaceConfig() {
                 workspaceConfig.mode = "local";
                 workspaceConfig.folderHandle = null; // Handle is lost, needs re-selection
 
-                // Show a toast to let user know they need to re-select folder
+                // Show confirm dialog to re-select folder
                 setTimeout(() => {
-                    showToast("📁 Please select your workspace folder again (browser security)", 5000);
-                }, 1000);
+                    if (confirm("📁 Your workspace folder was lost due to browser security.\n\nWould you like to select it again?")) {
+                        // User clicked OK - open workspace modal
+                        const workspaceModal = document.getElementById("workspaceModal");
+                        const workspaceBtn = document.getElementById("workspaceBtn");
+
+                        if (workspaceModal && workspaceBtn) {
+                            // Populate modal with current config
+                            const modeRadio = document.querySelector(`input[name="workspaceMode"][value="${workspaceConfig.mode}"]`);
+                            if (modeRadio) {
+                                modeRadio.checked = true;
+                            }
+
+                            // Trigger mode change to show folder picker
+                            const event = new Event("change", { bubbles: true });
+                            modeRadio.dispatchEvent(event);
+
+                            // Open the modal
+                            workspaceModal.classList.remove("hidden");
+                        }
+                    }
+                }, 500);
             }
         } catch (error) {
             console.warn("Failed to load saved workspace config:", error);
